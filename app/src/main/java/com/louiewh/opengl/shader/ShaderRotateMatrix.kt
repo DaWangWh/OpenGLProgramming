@@ -10,6 +10,7 @@ class ShaderRotateMatrix: ShaderOrthoMatrix() {
 
         super.onSurfaceChanged(gl, width, height)
         Matrix.rotateM(mvpMatrix, 0, 180f, 1f, 0f, 0f);
+        GLES30.glUseProgram(getShaderProgram())
         GLES30.glUniformMatrix4fv(uMatrix,1,false, mvpMatrix,0)
     }
 }

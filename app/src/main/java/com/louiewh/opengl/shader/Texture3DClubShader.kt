@@ -39,6 +39,7 @@ class Texture3DClubShader :BaseShader() {
     private var angle = -55f
 
     override fun onInitGLES(program: Int) {
+        Log.d("Texture3DClubShader", "onInitGLES start")
         vPosition  = GLES30.glGetAttribLocation(program, "aPos")
         vColor     = GLES30.glGetAttribLocation(program, "aColor")
         vTexCoord  = GLES30.glGetAttribLocation(program, "aTexCoord")
@@ -52,10 +53,13 @@ class Texture3DClubShader :BaseShader() {
         initVBO()
         // initEBO()
         initVAO()
+        Log.d("Texture3DClubShader", "Before initTexture")
         initTexture()
+        Log.d("Texture3DClubShader", "onInitGLES complete")
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        Log.d("Texture3DClubShader", "onSurfaceChanged: $width x $height")
         super.onSurfaceChanged(gl, width, height)
 
         aspectRatio = if (width > height) {
@@ -63,6 +67,12 @@ class Texture3DClubShader :BaseShader() {
         } else {
             height.toFloat() / width
         }
+
+        // 重置矩阵，避免切换shader时累加
+        Matrix.setIdentityM(modelMatrix, 0)
+        Matrix.setIdentityM(viewMatrix, 0)
+        Matrix.setIdentityM(projectionMatrix, 0)
+        Matrix.setIdentityM(mvpMatrix, 0)
 
         Matrix.rotateM(modelMatrix,0,-55f,1f,0f,0f)
         Matrix.translateM(viewMatrix,0,0f,0f,-3f)
@@ -73,13 +83,25 @@ class Texture3DClubShader :BaseShader() {
 
         GLES30.glUseProgram(getShaderProgram())
         GLES30.glUniformMatrix4fv(uMatrix,1,false, mvpMatrix,0)
+        Log.d("Texture3DClubShader", "onSurfaceChanged complete")
     }
 
     override fun onDestroyGLES() {
-        GLES30.glDeleteBuffers(1, IntArray(VAO), 0)
-        GLES30.glDeleteBuffers(1, IntArray(VBO), 0)
-        // GLES30.glDeleteBuffers(1, IntArray(EBO), 0)
-        GLES30.glDeleteTextures(1, IntArray(mTextureId), 0)
+        GLES30.glDeleteBuffers(1, intArrayOf(VAO), 0)
+        GLES30.glDeleteBuffers(1, intArrayOf(VBO), 0)
+        // GLES30.glDeleteBuffers(1, intArrayOf(EBO), 0)
+        GLES30.glDeleteTextures(1, intArrayOf(mTextureId), 0)
+    }
+
+    override fun onActivate() {
+        // 3D渲染需要启用深度测试
+        GLES30.glEnable(GLES30.GL_DEPTH_TEST)
+    }
+
+    override fun onDeactivate() {
+        super.onDeactivate()
+        // 禁用深度测试
+        GLES30.glDisable(GLES30.GL_DEPTH_TEST)
     }
 
     override fun getVertexSource(): String {
@@ -96,7 +118,10 @@ class Texture3DClubShader :BaseShader() {
         setMatrix()
         GLES30.glUniformMatrix4fv(uMatrix,1,false, mvpMatrix,0)
 
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mTextureId)
+        GLES30.glUniform1i(vSampler2D, 0)
+
         GLES30.glBindVertexArray(VAO)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 36)
 

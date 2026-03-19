@@ -83,10 +83,10 @@ class Texture3DShader :BaseShader() {
     }
 
     override fun onDestroyGLES() {
-        GLES30.glDeleteBuffers(1, IntArray(VAO), 0)
-        GLES30.glDeleteBuffers(1, IntArray(VBO), 0)
-        GLES30.glDeleteBuffers(1, IntArray(EBO), 0)
-        GLES30.glDeleteTextures(1, IntArray(mTextureId), 0)
+        GLES30.glDeleteBuffers(1, intArrayOf(VAO), 0)
+        GLES30.glDeleteBuffers(1, intArrayOf(VBO), 0)
+        GLES30.glDeleteBuffers(1, intArrayOf(EBO), 0)
+        GLES30.glDeleteTextures(1, intArrayOf(mTextureId), 0)
     }
 
     override fun getVertexSource(): String {
@@ -100,7 +100,10 @@ class Texture3DShader :BaseShader() {
     override fun onDrawFrame(gl: GL10?) {
         GLES30.glClear(GLES30.GL_DEPTH_BUFFER_BIT or GLES30.GL_COLOR_BUFFER_BIT)
 
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mTextureId)
+        GLES30.glUniform1i(vSampler2D, 0)
+
         GLES30.glBindVertexArray(VAO)
         GLES30.glDrawElements(GLES30.GL_TRIANGLES, 6, GLES30.GL_UNSIGNED_INT, 0)
 

@@ -71,6 +71,12 @@ class Texture3DMutiClubShader :BaseShader() {
             height.toFloat() / width
         }
 
+        // 重置矩阵，避免切换shader时累加
+        Matrix.setIdentityM(modelMatrix, 0)
+        Matrix.setIdentityM(viewMatrix, 0)
+        Matrix.setIdentityM(projectionMatrix, 0)
+        Matrix.setIdentityM(mvpMatrix, 0)
+
         Matrix.rotateM(modelMatrix,0,-55f,1f,0f,0f)
         Matrix.translateM(viewMatrix,0,0f,0f,-3f)
         Matrix.perspectiveM(projectionMatrix,0,45f, aspectRatio,0.1f,100f)
@@ -83,10 +89,21 @@ class Texture3DMutiClubShader :BaseShader() {
     }
 
     override fun onDestroyGLES() {
-        GLES30.glDeleteBuffers(1, IntArray(VAO), 0)
-        GLES30.glDeleteBuffers(1, IntArray(VBO), 0)
-        // GLES30.glDeleteBuffers(1, IntArray(EBO), 0)
-        GLES30.glDeleteTextures(1, IntArray(mTextureId), 0)
+        GLES30.glDeleteBuffers(1, intArrayOf(VAO), 0)
+        GLES30.glDeleteBuffers(1, intArrayOf(VBO), 0)
+        // GLES30.glDeleteBuffers(1, intArrayOf(EBO), 0)
+        GLES30.glDeleteTextures(1, intArrayOf(mTextureId), 0)
+    }
+
+    override fun onActivate() {
+        // 3D渲染需要启用深度测试
+        GLES30.glEnable(GLES30.GL_DEPTH_TEST)
+    }
+
+    override fun onDeactivate() {
+        super.onDeactivate()
+        // 禁用深度测试
+        GLES30.glDisable(GLES30.GL_DEPTH_TEST)
     }
 
     override fun getVertexSource(): String {
@@ -104,7 +121,10 @@ class Texture3DMutiClubShader :BaseShader() {
             setMatrix(i)
             GLES30.glUniformMatrix4fv(uMatrix, 1, false, mvpMatrix, 0)
 
+            GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
             GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mTextureId)
+            GLES30.glUniform1i(vSampler2D, 0)
+
             GLES30.glBindVertexArray(VAO)
             GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 36)
 

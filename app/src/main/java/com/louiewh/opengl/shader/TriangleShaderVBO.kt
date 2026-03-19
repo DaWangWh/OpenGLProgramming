@@ -28,7 +28,7 @@ class TriangleShaderVBO: TriangleShader() {
     }
 
     override fun onDestroyGLES() {
-        GLES30.glDeleteBuffers(1, IntArray(VBO), 0)
+        GLES30.glDeleteBuffers(1, intArrayOf(VBO), 0)
     }
 
     private fun initVBO() {

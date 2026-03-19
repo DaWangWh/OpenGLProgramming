@@ -88,10 +88,13 @@ class GlesSurfaceView : SurfaceView, SurfaceHolder.Callback {
         override fun run() {
             mEglHelper = EglHelper()
             mEglHelper.initEgl(mSurface)
+            Log.d(TAG, "Initial onSurfaceCreated")
             this@GlesSurfaceView.mRender?.onSurfaceCreated(mEglHelper.getGL(), mEglHelper.getEGLConfig())
 
+            var frameCount = 0
             while (mRunning) {
                 if (isSizeChange) {
+                    Log.d(TAG, "onSurfaceChanged due to size change: $mWidth x $mHeight")
                     this@GlesSurfaceView.mRender?.onSurfaceChanged(mEglHelper.getGL(), mWidth, mHeight)
                     isSizeChange = false
                 }
@@ -100,6 +103,10 @@ class GlesSurfaceView : SurfaceView, SurfaceHolder.Callback {
                     this@GlesSurfaceView.mRender?.onDrawFrame(mEglHelper.getGL())
                     this.mEglHelper.swapBuffers()
                     mRequestRender = false
+                    frameCount++
+                    if (frameCount <= 5) {
+                        Log.d(TAG, "Frame $frameCount rendered")
+                    }
                 }
 
                 try {
@@ -113,9 +120,12 @@ class GlesSurfaceView : SurfaceView, SurfaceHolder.Callback {
         }
 
         fun onWindowResize(w: Int, h: Int) {
+            Log.d(TAG, "onWindowResize: $w x $h")
             mWidth = w
             mHeight = h
-            isSizeChange = true
+            if (w > 0 && h > 0) {
+                isSizeChange = true
+            }
         }
 
         fun exit() {

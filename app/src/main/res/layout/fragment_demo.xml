@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".FragmentDemo">
+
+    <com.louiewh.opengl.GlesSurfaceView
+        android:id="@+id/glesSurfaceView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <Button
+        android:id="@+id/spinnerShader"
+        android:layout_width="280dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start"
+        android:layout_marginTop="8dp"
+        android:layout_marginStart="8dp"
+        android:background="#CC666666"
+        android:text="Select Shader"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+</FrameLayout>

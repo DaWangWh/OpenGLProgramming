@@ -1,12 +1,15 @@
 package com.louiewh.opengl.render
 
 import android.util.Log
-import com.louiewh.opengl.GlesConst
+import com.louiewh.opengl.ShaderManager
 
-class GlesRender(private val renderName:String): BaseRender() {
-    override fun initShader() {
-        Log.e("Gles", "initShader $renderName")
+class GlesRender(private val renderName: String = "") : BaseRender() {
 
-        baseShader = GlesConst.getShader(renderName)
+    init {
+        // 设置优先选择的shader名称
+        if (renderName.isNotEmpty()) {
+            ShaderManager.setPreferredShaderName(renderName)
+        }
+        Log.d("GlesRender", "Created with preferred shader: $renderName")
     }
 }

@@ -10,6 +10,7 @@ class ShaderScaleMatrix: ShaderOrthoMatrix() {
 
         super.onSurfaceChanged(gl, width, height)
         Matrix.scaleM(mvpMatrix,0,0.5f,0.5f,0f)
+        GLES30.glUseProgram(getShaderProgram())
         GLES30.glUniformMatrix4fv(uMatrix,1,false, mvpMatrix,0)
     }
 }

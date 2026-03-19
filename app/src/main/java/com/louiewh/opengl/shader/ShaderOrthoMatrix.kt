@@ -2,13 +2,16 @@ package com.louiewh.opengl.shader
 
 import android.opengl.GLES30
 import android.opengl.Matrix
+import android.util.Log
 import javax.microedition.khronos.opengles.GL10
 
 open class ShaderOrthoMatrix: ShaderMatrix() {
 
     protected val mvpMatrix = getUnitMatrix()
+    private val TAG = "ShaderOrthoMatrix"
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        Log.d(TAG, "onSurfaceChanged: $width x $height")
         super.onSurfaceChanged(gl, width, height)
 
         val aspectRatio = if (width > height) {
@@ -16,6 +19,9 @@ open class ShaderOrthoMatrix: ShaderMatrix() {
         } else {
             height.toFloat() / width
         }
+
+        // 重置矩阵为单位矩阵
+        System.arraycopy(getUnitMatrix(), 0, mvpMatrix, 0, 16)
 
         // 1. 矩阵数组
         // 2. 结果矩阵起始的偏移量
@@ -33,7 +39,9 @@ open class ShaderOrthoMatrix: ShaderMatrix() {
         }
 
         //更新 matrix 的值，即把 UnitMatrix 值，更新到 uMatrix 这个索引
+        GLES30.glUseProgram(getShaderProgram())
         GLES30.glUniformMatrix4fv(uMatrix,1,false, mvpMatrix,0)
+        Log.d(TAG, "Matrix set complete")
     }
 
     private fun getUnitMatrix() =  floatArrayOf(

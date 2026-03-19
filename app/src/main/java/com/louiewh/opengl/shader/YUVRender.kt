@@ -4,6 +4,7 @@ import android.opengl.GLES30
 import android.opengl.GLSurfaceView
 import android.util.Log
 import com.louiewh.opengl.ContextUtil
+import com.louiewh.opengl.GlesSurfaceView
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
@@ -33,8 +34,9 @@ open class YUVRender :BaseShader() {
     private val YUV_FILE = "video_288_512.yuv"
 
     private var mStop = false
+    private var isThreadRunning = false
     private lateinit var ioThread:Thread
-    private lateinit var glSurfaceView:GLSurfaceView
+    private lateinit var glesSurfaceView:GlesSurfaceView
 
     private var vPosition = 0
     private var vTexCoord = 0
@@ -44,11 +46,16 @@ open class YUVRender :BaseShader() {
     private var vSampler2D = 0
 
 
-    override fun onSetGLSurfaceView(glSurfaceView: GLSurfaceView) {
-        super.onSetGLSurfaceView(glSurfaceView)
-        glSurfaceView.renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
-        this.glSurfaceView = glSurfaceView
+    override fun onSetGlesSurfaceView(glesSurfaceView: GlesSurfaceView) {
+        glesSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY)
+        this.glesSurfaceView = glesSurfaceView
     }
+
+    override fun onSetGLSurfaceView(glSurfaceView: GLSurfaceView) {
+        glSurfaceView.renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
+    }
+
+    override fun getRenderMode(): Int = GLSurfaceView.RENDERMODE_WHEN_DIRTY
 
     override fun onInitGLES(program: Int) {
         vPosition  = GLES30.glGetAttribLocation(program, "aPos")
@@ -66,19 +73,57 @@ open class YUVRender :BaseShader() {
         uTextureId = initTexture(uSampler2D)
         vTextureId = initTexture(vSampler2D)
 
-        ioThread = thread(name = "IOYUV") {  readYuvData(YUV_FILE, wVideo, hVideo)}
+        // 不在这里启动IO线程，由onActivate()统一管理
+    }
+
+    private fun startIOThread() {
+        if (isThreadRunning) {
+            Log.d("YUVRender", "IO thread already running, skip start")
+            return
+        }
+        mStop = false
+        isThreadRunning = true
+        ioThread = thread(name = "IOYUV") { readYuvData(YUV_FILE, wVideo, hVideo) }
+        Log.d("YUVRender", "IO thread started")
+    }
+
+    private fun stopIOThread() {
+        if (!isThreadRunning) {
+            return
+        }
+        mStop = true
+        isThreadRunning = false
+        try {
+            if (::ioThread.isInitialized) {
+                ioThread.interrupt()
+                ioThread.join(500)
+            }
+        } catch (e: Exception) {
+            Log.e("YUVRender", "stopIOThread error", e)
+        }
+        Log.d("YUVRender", "IO thread stopped")
+    }
+
+    override fun onDeactivate() {
+        Log.d("YUVRender", "onDeactivate: stopping IO thread")
+        stopIOThread()
+    }
+
+    override fun onActivate() {
+        Log.d("YUVRender", "onActivate: starting IO thread")
+        startIOThread()
     }
 
     override fun onDestroyGLES() {
-        mStop = true
+        stopIOThread()
 
-        GLES30.glDeleteBuffers(1, IntArray(VAO), 0)
-        GLES30.glDeleteBuffers(1, IntArray(VBO), 0)
-        GLES30.glDeleteBuffers(1, IntArray(EBO), 0)
+        GLES30.glDeleteBuffers(1, intArrayOf(VAO), 0)
+        GLES30.glDeleteBuffers(1, intArrayOf(VBO), 0)
+        GLES30.glDeleteBuffers(1, intArrayOf(EBO), 0)
 
-        GLES30.glDeleteTextures(1, IntArray(yTextureId), 0)
-        GLES30.glDeleteTextures(1, IntArray(uTextureId), 0)
-        GLES30.glDeleteTextures(1, IntArray(vTextureId), 0)
+        GLES30.glDeleteTextures(1, intArrayOf(yTextureId), 0)
+        GLES30.glDeleteTextures(1, intArrayOf(uTextureId), 0)
+        GLES30.glDeleteTextures(1, intArrayOf(vTextureId), 0)
     }
 
     override fun getVertexSource(): String {
@@ -276,29 +321,30 @@ open class YUVRender :BaseShader() {
         val u = ByteArray(w * h / 4)
         val v = ByteArray(w * h / 4)
 
-        while (true) {
-            if (mStop) {
-                Log.d("", "readYuvData,退出")
-                return
+        try {
+            while (!mStop) {
+                val readY = input.read(y)
+                val readU = input.read(u)
+                val readV = input.read(v)
+
+                if (readY > 0 && readU > 0 && readV > 0) {
+                    //从这里触发刷新
+                    yByteBuffer = ByteBuffer.wrap(y)
+                    uByteBuffer = ByteBuffer.wrap(u)
+                    vByteBuffer = ByteBuffer.wrap(v)
+
+                    //主动触发刷新
+                    glesSurfaceView.requestRender()
+                    //延时30ms，控制速度
+                    Thread.sleep(30)
+                } else {
+                    return
+                }
             }
-
-            val readY = input.read(y)
-            val readU = input.read(u)
-            val readV = input.read(v)
-
-            if (readY > 0 && readU > 0 && readV > 0) {
-                //从这里触发刷新
-                yByteBuffer = ByteBuffer.wrap(y)
-                uByteBuffer = ByteBuffer.wrap(u)
-                vByteBuffer = ByteBuffer.wrap(v)
-
-                //主动触发刷新
-                glSurfaceView.requestRender()
-                //延时30ms，控制速度
-                Thread.sleep(30)
-            } else {
-                return
-            }
+        } catch (e: InterruptedException) {
+            Log.d("YUVRender", "IO thread interrupted")
+        } finally {
+            input.close()
         }
     }
 }
