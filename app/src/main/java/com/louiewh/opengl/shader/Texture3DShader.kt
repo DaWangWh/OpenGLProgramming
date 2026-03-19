@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.opengl.GLES30
 import android.opengl.Matrix
-import android.util.Log
 import com.louiewh.opengl.ContextUtil
 import com.louiewh.opengl.R
 import java.nio.ByteBuffer
@@ -24,7 +23,6 @@ class Texture3DShader :BaseShader() {
     private var  mTextureId = 0
 
     private var vPosition = 0
-    private var vColor = 0
     private var vTexCoord = 0
     private var vSampler2D = 0
 
@@ -32,12 +30,9 @@ class Texture3DShader :BaseShader() {
 
     override fun onInitGLES(program: Int) {
         vPosition  = GLES30.glGetAttribLocation(program, "aPos")
-        vColor     = GLES30.glGetAttribLocation(program, "aColor")
         vTexCoord  = GLES30.glGetAttribLocation(program, "aTexCoord")
         vSampler2D = GLES30.glGetUniformLocation(program, "ourTexture")
         uMatrix   = GLES30.glGetUniformLocation(program, "uMatrix")
-
-        Log.e("Gles", "onInitGLES ->vPosition: $vPosition vColor: $vColor vTexCoord: $vTexCoord")
 
         initVBO()
         initEBO()
@@ -48,42 +43,30 @@ class Texture3DShader :BaseShader() {
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         super.onSurfaceChanged(gl, width, height)
 
-        var aspectRatio = if (width > height) {
-            width.toFloat() / height
-        } else {
-            height.toFloat() / width
+        if (width <= 0 || height <= 0) {
+            return
         }
 
-        val orthoMatrix = getUnitMatrix()
-        val piot = 1f
-        aspectRatio *= piot
-
-        if (width > height){
-            Matrix.orthoM(orthoMatrix, 0, -aspectRatio, aspectRatio, -piot, piot, -piot, piot)
-        }else{
-            Matrix.orthoM(orthoMatrix,0, -piot, piot, -aspectRatio, aspectRatio, -piot, piot)
-        }
+        val aspectRatio = width.toFloat() / height.toFloat()
 
         val modelMatrix = getUnitMatrix()
         val viewMatrix = getUnitMatrix()
         val projectionMatrix = getUnitMatrix()
         val mvpMatrix = getUnitMatrix()
 
-        // Matrix.rotateM(modelMatrix,0, -55f, 1f, 0f, 0f)
-//        Matrix.translateM(modelMatrix, 0, 0.0f, 0f, -0.1f)
-        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 5f, 0f, 0f, 0f, 0f, 1f, 0f)
-        Matrix.perspectiveM(projectionMatrix, 0, 20f, aspectRatio, 5f, 10f)
+        Matrix.rotateM(modelMatrix, 0, -28f, 1f, 0f, 0f)
+        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 3f, 0f, 0f, 0f, 0f, 1f, 0f)
+        Matrix.perspectiveM(projectionMatrix, 0, 45f, aspectRatio, 0.1f, 100f)
 
         Matrix.multiplyMM(mvpMatrix,0, viewMatrix,0, modelMatrix,0)
         Matrix.multiplyMM(mvpMatrix,0, projectionMatrix,0, mvpMatrix,0)
-//        Matrix.multiplyMM(mvpMatrix,0, orthoMatrix,0, mvpMatrix,0)
 
         GLES30.glUseProgram(getShaderProgram())
         GLES30.glUniformMatrix4fv(uMatrix,1,false, mvpMatrix,0)
     }
 
     override fun onDestroyGLES() {
-        GLES30.glDeleteBuffers(1, intArrayOf(VAO), 0)
+        GLES30.glDeleteVertexArrays(1, intArrayOf(VAO), 0)
         GLES30.glDeleteBuffers(1, intArrayOf(VBO), 0)
         GLES30.glDeleteBuffers(1, intArrayOf(EBO), 0)
         GLES30.glDeleteTextures(1, intArrayOf(mTextureId), 0)
@@ -100,6 +83,7 @@ class Texture3DShader :BaseShader() {
     override fun onDrawFrame(gl: GL10?) {
         GLES30.glClear(GLES30.GL_DEPTH_BUFFER_BIT or GLES30.GL_COLOR_BUFFER_BIT)
 
+        GLES30.glUseProgram(getShaderProgram())
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mTextureId)
         GLES30.glUniform1i(vSampler2D, 0)
@@ -109,6 +93,11 @@ class Texture3DShader :BaseShader() {
 
         GLES30.glBindVertexArray(GLES30.GL_NONE)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, GLES30.GL_NONE)
+    }
+
+    override fun onActivate() {
+        GLES30.glDisable(GLES30.GL_DEPTH_TEST)
+        GLES30.glDisable(GLES30.GL_CULL_FACE)
     }
 
     private fun getUnitMatrix() =  floatArrayOf(
@@ -159,11 +148,9 @@ class Texture3DShader :BaseShader() {
         GLES30.glBindBuffer(GLES30.GL_ELEMENT_ARRAY_BUFFER, EBO)
 
         GLES30.glVertexAttribPointer(vPosition, 3, GLES30.GL_FLOAT, false, 8 * VERTICES_FLOAT_SIZE, 0)
-        GLES30.glVertexAttribPointer(vColor,    3, GLES30.GL_FLOAT, false, 8 * VERTICES_FLOAT_SIZE, 3*VERTICES_FLOAT_SIZE)
         GLES30.glVertexAttribPointer(vTexCoord, 2, GLES30.GL_FLOAT, false, 8 * VERTICES_FLOAT_SIZE, 6*VERTICES_FLOAT_SIZE)
 
         GLES30.glEnableVertexAttribArray(vPosition)
-        GLES30.glEnableVertexAttribArray(vColor)
         GLES30.glEnableVertexAttribArray(vTexCoord)
 
         //解绑
@@ -176,10 +163,10 @@ class Texture3DShader :BaseShader() {
     private fun getVertices(): FloatBuffer {
         val vertices = floatArrayOf(
             // ---- 位置 ----       ---- 颜色 ----     - 纹理坐标 -
-            1.0f,  1.0f,  0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 0.0f,   // 右上
-            1.0f, -1.0f,  0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 1.0f,   // 右下
-            -1.0f, -1.0f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 1.0f,   // 左下
-            -1.0f,  1.0f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 0.0f    // 左上
+            0.42f,  0.62f,  0.10f,   1.0f, 0.0f, 0.0f,   1.0f, 0.0f,   // 右上
+            0.56f, -0.62f,  0.32f,   0.0f, 1.0f, 0.0f,   1.0f, 1.0f,   // 右下
+            -0.56f, -0.62f, 0.32f,   0.0f, 0.0f, 1.0f,   0.0f, 1.0f,   // 左下
+            -0.42f,  0.62f, 0.10f,   1.0f, 1.0f, 0.0f,   0.0f, 0.0f    // 左上
         )
 
         // vertices.length*4是因为一个float占四个字节

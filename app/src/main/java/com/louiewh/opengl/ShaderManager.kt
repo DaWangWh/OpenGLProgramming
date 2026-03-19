@@ -20,6 +20,8 @@ object ShaderManager {
     private var currentHeight = 0
     private var glesSurfaceView: GlesSurfaceView? = null
     private var isInitialized = false
+    private var currentTraceId: Long = 0
+    private var firstFrameLogged = false
 
     /**
      * 设置首次初始化时优先选择的shader名称
@@ -38,13 +40,18 @@ object ShaderManager {
         // 如果已经初始化过，先清理旧资源（上下文丢失后旧资源无效）
         if (isInitialized) {
             Log.d(TAG, "Re-initializing shaders after context lost")
+            currentShaderName?.let { currentName ->
+                shaders[currentName]?.onDeactivate()
+            }
+            shaders.values.forEach { it.destroyGLES() }
             shaders.clear()
             currentShaderName = null
         }
 
         this.glesSurfaceView = glSurfaceView
-        this.currentWidth = width
-        this.currentHeight = height
+        val initialSize = resolveSurfaceSize(width, height)
+        this.currentWidth = initialSize.first
+        this.currentHeight = initialSize.second
 
         Log.d(TAG, "Initializing all shaders, count: ${GlesConst.shaderArray.size}")
         GlesConst.shaderArray.forEach { meta ->
@@ -52,8 +59,8 @@ object ShaderManager {
             val shader = meta.shaderFactory()
             shader.onSetGlesSurfaceView(glSurfaceView)
             shader.onSurfaceCreated()
-            if (width > 0 && height > 0) {
-                shader.onSurfaceChanged(null, width, height)
+            if (currentWidth > 0 && currentHeight > 0) {
+                shader.onSurfaceChanged(null, currentWidth, currentHeight)
             }
             shaders[meta.renderName] = shader
             val elapsed = System.currentTimeMillis() - startTime
@@ -80,15 +87,16 @@ object ShaderManager {
     /**
      * 切换shader（在onDrawFrame中调用）
      */
-    fun useShader(name: String): Boolean {
+    fun useShader(name: String, traceId: Long = 0): Boolean {
+        Log.d(TAG, "trace=$traceId useShader start, target=$name, current=$currentShaderName, thread=${Thread.currentThread().name}")
         if (currentShaderName == name) {
-            Log.d(TAG, "Shader '$name' is already active")
+            Log.d(TAG, "trace=$traceId Shader '$name' is already active")
             return false
         }
 
         val shader = shaders[name]
         if (shader == null) {
-            Log.e(TAG, "Shader '$name' not found")
+            Log.e(TAG, "trace=$traceId Shader '$name' not found")
             return false
         }
 
@@ -98,6 +106,8 @@ object ShaderManager {
         }
 
         currentShaderName = name
+        currentTraceId = traceId
+        firstFrameLogged = false
 
         // 重置GL状态到默认值
         resetGLState()
@@ -105,8 +115,14 @@ object ShaderManager {
         GLES30.glUseProgram(shader.getProgramId())
 
         // 切换时调用onSurfaceChanged，确保Matrix shader正确设置
+        val surfaceSize = resolveSurfaceSize(currentWidth, currentHeight)
+        currentWidth = surfaceSize.first
+        currentHeight = surfaceSize.second
         if (currentWidth > 0 && currentHeight > 0) {
+            Log.d(TAG, "trace=$traceId Applying surface size ${currentWidth}x${currentHeight} to shader '$name'")
             shader.onSurfaceChanged(null, currentWidth, currentHeight)
+        } else {
+            Log.w(TAG, "trace=$traceId No valid surface size for shader '$name'")
         }
 
         // 切换render mode
@@ -115,7 +131,7 @@ object ShaderManager {
         // 启动新shader的后台线程等资源
         shader.onActivate()
 
-        Log.d(TAG, "Switched to shader '$name', program=${shader.getProgramId()}, renderMode=${shader.getRenderMode()}")
+        Log.d(TAG, "trace=$traceId Switched to shader '$name', program=${shader.getProgramId()}, renderMode=${shader.getRenderMode()}")
         return true
     }
 
@@ -157,8 +173,13 @@ object ShaderManager {
     fun setInitialShader(name: String) {
         if (shaders.containsKey(name)) {
             currentShaderName = name
+            currentTraceId = 0
+            firstFrameLogged = false
             shaders[name]?.let {
                 GLES30.glUseProgram(it.getProgramId())
+                val surfaceSize = resolveSurfaceSize(currentWidth, currentHeight)
+                currentWidth = surfaceSize.first
+                currentHeight = surfaceSize.second
                 if (currentWidth > 0 && currentHeight > 0) {
                     it.onSurfaceChanged(null, currentWidth, currentHeight)
                 }
@@ -198,4 +219,22 @@ object ShaderManager {
      * 获取已创建的shader数量
      */
     fun getShaderCount(): Int = shaders.size
+
+    fun markFrameDrawn() {
+        val shaderName = currentShaderName ?: return
+        if (!firstFrameLogged) {
+            firstFrameLogged = true
+            Log.d(TAG, "trace=$currentTraceId First frame drawn for shader '$shaderName'")
+        }
+    }
+
+    private fun resolveSurfaceSize(width: Int, height: Int): Pair<Int, Int> {
+        if (width > 0 && height > 0) {
+            return width to height
+        }
+
+        val viewWidth = glesSurfaceView?.width ?: 0
+        val viewHeight = glesSurfaceView?.height ?: 0
+        return viewWidth to viewHeight
+    }
 }

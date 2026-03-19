@@ -36,7 +36,7 @@ class MainActivity : AppCompatActivity() {
                 .setAction("Action", null).show()
         }
 
-        ContextUtil.init(this)
+        ContextUtil.init(applicationContext)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

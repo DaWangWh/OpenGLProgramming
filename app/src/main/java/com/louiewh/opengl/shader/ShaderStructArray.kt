@@ -24,7 +24,7 @@ class ShaderStructArray: BaseShader() {
     }
 
     override fun onDestroyGLES() {
-        GLES30.glDeleteBuffers(1, intArrayOf(VAO), 0)
+        GLES30.glDeleteVertexArrays(1, intArrayOf(VAO), 0)
         GLES30.glDeleteBuffers(1, intArrayOf(VBO), 0)
     }
 

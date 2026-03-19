@@ -4,14 +4,19 @@ import android.opengl.GLSurfaceView
 import android.util.Log
 import com.louiewh.opengl.GlesSurfaceView
 import com.louiewh.opengl.ShaderManager
+import java.util.concurrent.atomic.AtomicLong
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
 abstract class BaseRender : GLSurfaceView.Renderer {
 
     private val TAG = "BaseRender"
+    private val switchTraceCounter = AtomicLong(0)
 
+    @Volatile
     private var pendingShaderName: String? = null
+    @Volatile
+    private var pendingTraceId: Long = 0
     private var _glesSurfaceView: GlesSurfaceView? = null
 
     open fun setGLSurfaceView(glSurfaceView: GLSurfaceView) {
@@ -51,17 +56,24 @@ abstract class BaseRender : GLSurfaceView.Renderer {
     override fun onDrawFrame(gl: GL10?) {
         // 处理切换请求
         pendingShaderName?.let { name ->
-            ShaderManager.useShader(name)
+            val traceId = pendingTraceId
+            Log.d(TAG, "trace=$traceId GL thread received switch request, shader=$name, thread=${Thread.currentThread().name}")
+            ShaderManager.useShader(name, traceId)
             pendingShaderName = null
+            pendingTraceId = 0
         }
 
         // 绘制当前shader
         ShaderManager.getCurrentShader()?.onDrawFrame(gl)
+        ShaderManager.markFrameDrawn()
     }
 
     fun switchShader(name: String) {
-        Log.d(TAG, "Requesting shader switch to: $name")
+        val traceId = switchTraceCounter.incrementAndGet()
+        Log.d(TAG, "trace=$traceId UI requested shader switch, shader=$name, thread=${Thread.currentThread().name}")
         pendingShaderName = name
+        pendingTraceId = traceId
+        _glesSurfaceView?.requestRender()
     }
 
     fun destroyShader() {

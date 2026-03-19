@@ -213,7 +213,7 @@ class MyShader : BaseShader() {
 3. 在 `GlesConst.kt` 中注册:
 
 ```kotlin
-ShaderMeta("MyShader", { MyShader() }),
+ShaderMeta("MyShader", { MyShader() })
 ```
 
 ShaderManager 会自动管理生命周期，无需其他修改。

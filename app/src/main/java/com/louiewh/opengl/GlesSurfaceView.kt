@@ -72,16 +72,18 @@ class GlesSurfaceView : SurfaceView, SurfaceHolder.Callback {
         private var mSurface: Surface
         private var mWidth = 0
         private var mHeight = 0
-        private var mRenderMode = 0
+        private var mRenderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
         private var mRequestRender = false
+        @Volatile
         private var mRunning = true
         private var isSizeChange = false
+        private val renderLock = Object()
 
         constructor(surface: Surface) : super() {
             mWidth = 0
             mHeight = 0
             mRequestRender = true
-            mRenderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+            mRenderMode = this@GlesSurfaceView.mRenderMode
             mSurface = surface
         }
 
@@ -93,26 +95,66 @@ class GlesSurfaceView : SurfaceView, SurfaceHolder.Callback {
 
             var frameCount = 0
             while (mRunning) {
-                if (isSizeChange) {
-                    Log.d(TAG, "onSurfaceChanged due to size change: $mWidth x $mHeight")
-                    this@GlesSurfaceView.mRender?.onSurfaceChanged(mEglHelper.getGL(), mWidth, mHeight)
-                    isSizeChange = false
+                var needResize = false
+                var width = 0
+                var height = 0
+                var shouldDraw = false
+                var isContinuousMode = false
+                var shouldExit = false
+
+                synchronized(renderLock) {
+                    while (
+                        mRunning &&
+                        !isSizeChange &&
+                        !mRequestRender &&
+                        mRenderMode != GLSurfaceView.RENDERMODE_CONTINUOUSLY
+                    ) {
+                        try {
+                            renderLock.wait()
+                        } catch (e: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                        }
+                    }
+
+                    if (!mRunning) {
+                        shouldExit = true
+                    }
+
+                    isContinuousMode = mRenderMode == GLSurfaceView.RENDERMODE_CONTINUOUSLY
+                    if (isSizeChange) {
+                        needResize = true
+                        width = mWidth
+                        height = mHeight
+                        isSizeChange = false
+                    }
+                    shouldDraw = isContinuousMode || mRequestRender || needResize
+                    mRequestRender = false
                 }
 
-                if (mRenderMode == GLSurfaceView.RENDERMODE_CONTINUOUSLY || mRequestRender) {
+                if (shouldExit) {
+                    break
+                }
+
+                if (needResize) {
+                    Log.d(TAG, "onSurfaceChanged due to size change: $width x $height")
+                    this@GlesSurfaceView.mRender?.onSurfaceChanged(mEglHelper.getGL(), width, height)
+                }
+
+                if (shouldDraw) {
                     this@GlesSurfaceView.mRender?.onDrawFrame(mEglHelper.getGL())
                     this.mEglHelper.swapBuffers()
-                    mRequestRender = false
                     frameCount++
                     if (frameCount <= 5) {
                         Log.d(TAG, "Frame $frameCount rendered")
                     }
                 }
 
-                try {
-                    sleep(16)
-                } catch (e: Exception) {
-                    Log.e(TAG, "sleep Exception", e)
+                if (isContinuousMode) {
+                    try {
+                        sleep(16)
+                    } catch (e: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                    }
                 }
             }
 
@@ -121,29 +163,44 @@ class GlesSurfaceView : SurfaceView, SurfaceHolder.Callback {
 
         fun onWindowResize(w: Int, h: Int) {
             Log.d(TAG, "onWindowResize: $w x $h")
-            mWidth = w
-            mHeight = h
-            if (w > 0 && h > 0) {
-                isSizeChange = true
+            synchronized(renderLock) {
+                mWidth = w
+                mHeight = h
+                if (w > 0 && h > 0) {
+                    isSizeChange = true
+                    renderLock.notifyAll()
+                }
             }
         }
 
         fun exit() {
-            mRunning = false
+            synchronized(renderLock) {
+                mRunning = false
+                renderLock.notifyAll()
+            }
             try {
-                mGlesThread?.join()
+                if (Thread.currentThread() !== this) {
+                    join()
+                }
             } catch (e: InterruptedException) {
                 Log.e(TAG, "exit", e)
+                Thread.currentThread().interrupt()
             }
             mGlesThread = null
         }
 
         fun setRenderMode(mode: Int) {
-            mRenderMode = mode
+            synchronized(renderLock) {
+                mRenderMode = mode
+                renderLock.notifyAll()
+            }
         }
 
         fun requestRender() {
-            mRequestRender = true
+            synchronized(renderLock) {
+                mRequestRender = true
+                renderLock.notifyAll()
+            }
         }
     }
 

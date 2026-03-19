@@ -117,7 +117,7 @@ open class YUVRender :BaseShader() {
     override fun onDestroyGLES() {
         stopIOThread()
 
-        GLES30.glDeleteBuffers(1, intArrayOf(VAO), 0)
+        GLES30.glDeleteVertexArrays(1, intArrayOf(VAO), 0)
         GLES30.glDeleteBuffers(1, intArrayOf(VBO), 0)
         GLES30.glDeleteBuffers(1, intArrayOf(EBO), 0)
 
